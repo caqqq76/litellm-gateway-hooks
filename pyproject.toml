@@ -1,6 +1,6 @@
 [project]
 name = "litellm-gateway-hooks"
-version = "0.3.0"
+version = "0.0.1"
 description = "Custom hook code for the LiteLLM proxy: user identity, model routing, rate limits and budgets"
 readme = "README.md"
 requires-python = ">=3.10"
