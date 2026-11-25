@@ -1,0 +1,26 @@
+[project]
+name = "litellm-gateway-hooks"
+version = "0.3.0"
+description = "Custom hook code for the LiteLLM proxy: user identity, model routing, rate limits and budgets"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "litellm>=1.108.4,<1.109",
+    "redis>=5",
+    "pydantic>=2",
+    "pyyaml>=6",
+    "tzdata",
+]
+
+[project.optional-dependencies]
+test = ["litellm[proxy]>=1.108.4,<1.109", "pytest", "pytest-asyncio", "fakeredis[lua]"]
+
+[project.scripts]
+gateway-hooks-check = "gateway_hooks.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["gateway_hooks", "gateway_hooks.core", "gateway_hooks.hooks", "gateway_hooks.limits", "gateway_hooks.routing"]

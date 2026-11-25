@@ -1,0 +1,22 @@
+settings:
+  rpm_window_seconds: 6
+  redis_url: redis://127.0.0.1:6390/0
+  missing_user: deny
+users:
+  dave:
+    models:
+      gpt-4o: {rpm: 2}
+  carol:
+    models:
+      gpt-4o-mini:
+        budget:
+          peak: {"1d": 1}
+          off_peak: {"1d": 1}
+  alice:
+    model_routes: {chat-default: gpt-4o}
+    models:
+      gpt-4o: {rpm: 3}
+      gpt-4o-mini:
+        budget:
+          peak: {"1d": 0.00001}
+          off_peak: {"1d": 0.00001}

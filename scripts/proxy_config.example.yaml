@@ -1,0 +1,11 @@
+# Add these sections to your existing LiteLLM proxy config.yaml.
+# Environment: GATEWAY_HOOKS_CONFIG=/path/to/gateway-hooks.yaml, GATEWAY_HOOKS_REDIS_URL=redis://host:6379/0
+
+litellm_settings:
+  callbacks:
+    - gateway_hooks.callback.proxy_handler_instance   # keep it first
+
+general_settings:
+  user_header_mappings:
+    - header_name: x-end-user-id     # header the apps send; value = LiteLLM user_id
+      litellm_user_role: customer

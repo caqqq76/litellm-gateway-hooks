@@ -1,0 +1,20 @@
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: fake-key
+      mock_response: "Hello from the mock gpt-4o deployment"
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: fake-key
+      mock_response: "Hello from the mock gpt-4o-mini deployment"
+
+litellm_settings:
+  callbacks: gateway_hooks.callback.proxy_handler_instance
+
+general_settings:
+  master_key: sk-e2e-1234
+  user_header_mappings:
+    - header_name: x-end-user-id
+      litellm_user_role: customer

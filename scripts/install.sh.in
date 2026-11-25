@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Offline install of litellm-gateway-hooks into the LiteLLM proxy's Python environment.
+# Usage: ./install.sh [/path/to/python]   (default: python3)
+set -euo pipefail
+
+PY="${1:-python3}"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if ! LITELLM_VERSION="$("$PY" -c 'import importlib.metadata as m; print(m.version("litellm"))' 2>/dev/null)"; then
+  echo "error: litellm is not installed for $PY. Install litellm-gateway-hooks into the proxy's environment." >&2
+  exit 1
+fi
+case "$LITELLM_VERSION" in
+  1.108.*) ;;
+  *) echo "error: litellm-gateway-hooks @VERSION@ is built for litellm 1.108.x, found $LITELLM_VERSION" >&2; exit 1 ;;
+esac
+
+"$PY" -m pip install --no-index --find-links "$DIR/wheelhouse" litellm-gateway-hooks==@VERSION@
+"$PY" -c 'import gateway_hooks.gateway, gateway_hooks.limits.store; print("litellm-gateway-hooks installed for litellm", __import__("importlib.metadata").metadata.version("litellm"))'

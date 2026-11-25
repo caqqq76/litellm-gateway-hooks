@@ -1,0 +1,91 @@
+# litellm-gateway-hooks config: user identity, model routing, limits and budgets. Read once at startup (restart to apply changes).
+#
+# Resolution for a request by user U (team T) for model M, field by field, first match wins:
+#   users.U.models.M -> users.U.models."*" -> teams.T.models.M -> teams.T.models."*"
+#   -> defaults.models.M -> defaults.models."*"
+# A missing field inherits. -1 lifts a limit set by a lower layer. 0 disables (rpm/tpm/concurrency -> 403,
+# budget -> 429 until the period changes, e.g. "no expensive model during peak hours").
+#
+# Models are the LiteLLM model group names AFTER routing (model_routes), so spend is tracked per user per
+# real model no matter which application or alias sent the request.
+
+settings:
+  redis_url: os.environ/GATEWAY_HOOKS_REDIS_URL
+  key_prefix: gwh
+  redis_timeout_ms: 50        # Redis slower than this -> request is let through (fail open)
+  redis_connect_timeout_ms: 1000  # first call only (connect + script load)
+  db_timeout_ms: 200          # team lookup slower than this -> continue without team settings
+  team_cache_ttl_seconds: 60  # how long a user's identity and team are cached
+  rpm_window_seconds: 60      # rolling
+  tpm_window_seconds: 60      # rolling
+  tpm_bucket_seconds: 5
+  lease_ttl_seconds: 900      # a concurrency slot is reclaimed after this even if never released
+  concurrency_retry_after_ms: 1000
+  # Who a request belongs to:
+  #   1. the end-user header, matched against these LiteLLM_UserTable columns in order
+  #   2. no header: the user the API key belongs to (personal keys)
+  # Counters always use the LiteLLM user_id, so header and personal-key traffic of one person share limits.
+  user_lookup_fields: [user_id, sso_user_id]
+  key_user_fallback: true
+  ignored_key_users: [default_user_id]   # the master key's owner is not a person
+  missing_user: deny          # no header and no usable key owner: deny (400) | allow (no limits)
+  unknown_user: defaults      # header value matches no LiteLLM user: defaults | deny (403)
+
+peak_hours:
+  timezone: Asia/Taipei
+  weekdays: [mon, tue, wed, thu, fri]
+  start: "09:00"
+  end: "18:00"
+  # Fill both lists from the official DGPA calendar each year (行政院人事行政總處 辦公日曆表).
+  holidays:                   # workdays that are NOT peak (national holidays, make-up days off)
+    - 2026-01-01
+  extra_workdays: []          # weekend days that ARE workdays (補班), e.g. - 2026-02-07
+
+windows:
+  "15m": {seconds: 900, mode: rolling, bucket_seconds: 60}
+  "1h": {seconds: 3600, mode: fixed, anchor: midnight}       # clock hours
+  "1d": {seconds: 86400, mode: fixed, anchor: midnight}      # calendar day, Taipei time
+
+defaults:
+  models:
+    "*":
+      rpm: 20
+      tpm: 40000
+      max_parallel_requests: 2
+      budget:
+        peak: {"15m": 0.25, "1h": 0.5, "1d": 2.0}
+        off_peak: {"15m": 0.5, "1h": 1.0, "1d": 4.0}
+
+teams:
+  # key = LiteLLM team_id or team_alias
+  engineering:
+    model_routes:             # alias the app sends -> LiteLLM model group
+      chat-default: gpt-4o
+      chat-cheap: gpt-4o-mini
+    allowed_models: [gpt-4o, gpt-4o-mini]   # after routing; glob patterns allowed; omit = no restriction
+    models:
+      gpt-4o:
+        rpm: 30
+        tpm: 100000
+        max_parallel_requests: 3
+        budget:
+          peak: {"15m": 0.5, "1h": 1.0, "1d": 5.0}
+          off_peak: {"15m": 1.0, "1h": 2.0, "1d": 10.0}
+      gpt-4o-mini:
+        rpm: 60
+        tpm: 200000
+        max_parallel_requests: 5
+    team_pool:                # optional: shared by all members of the team combined
+      models:
+        gpt-4o:
+          budget:
+            peak: {"1d": 50.0}
+            off_peak: {"1d": 80.0}
+
+users:
+  # key = LiteLLM user_id or sso_user_id (e.g. the NT account), whichever is easier to read
+  alice.chen:
+    models:
+      gpt-4o:
+        budget:
+          peak: {"1d": 15.0}  # alice only: bigger daily peak budget, everything else from her team
