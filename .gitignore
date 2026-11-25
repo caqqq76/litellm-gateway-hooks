@@ -4,3 +4,10 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
+
+# Secrets: keep out of git (the hooks in .githooks/ also scan for them)
+.env
+.env.*
+!.env.example
+*.pem
+*.key

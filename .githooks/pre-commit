@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Block a commit whose staged changes contain a secret.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+
+gitleaks="$(find_gitleaks)"
+if ! "$gitleaks" git --pre-commit --staged --redact --no-banner --verbose --log-level warn \
+     --config "$REPO_ROOT/.gitleaks.toml" "$REPO_ROOT"; then
+  blocked "in the staged changes" "committed"
+  exit 1
+fi

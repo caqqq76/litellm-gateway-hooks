@@ -1,0 +1,23 @@
+# Secret scanning for the git hooks in .githooks/ (gitleaks). The built-in rules plus ones for this project.
+
+title = "litellm-gateway-hooks"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "litellm-key"
+description = "LiteLLM master or virtual key"
+regex = '''\bsk-[A-Za-z0-9_-]{20,}'''
+keywords = ["sk-"]
+
+[[rules]]
+id = "url-with-password"
+description = "Database, cache or queue URL with an inline password"
+regex = '''\b(?:postgres(?:ql)?|redis|rediss|mysql|mongodb(?:\+srv)?|amqps?)://[^:/\s@]*:([^@\s]+)@'''
+secretGroup = 1
+keywords = ["://"]
+
+  [[rules.allowlists]]
+  description = "Placeholders, not real passwords"
+  regexes = ['''^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|<[^>]*>|password|changeme|\*+|x+)$''']

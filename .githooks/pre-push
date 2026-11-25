@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Block a push if any commit it would send contains a secret. This also catches commits made with --no-verify.
+# git passes the remote name as $1 and one "<local ref> <local sha> <remote ref> <remote sha>" line per ref on stdin.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+
+remote="$1"
+gitleaks="$(find_gitleaks)"
+zero="$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue   # deleting a remote ref sends no commits
+  if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    log_opts="$remote_sha..$local_sha"
+  else
+    # New remote ref, or its commit isn't known here: scan everything the remote-tracking refs don't have.
+    # For a remote given as a URL nothing matches, so the whole history of the ref is scanned.
+    log_opts="$local_sha --not --remotes=$remote"
+  fi
+  if ! "$gitleaks" git --log-opts="$log_opts" --redact --no-banner --verbose --log-level warn \
+       --config "$REPO_ROOT/.gitleaks.toml" "$REPO_ROOT"; then
+    blocked "in commits on $local_ref" "pushed"
+    exit 1
+  fi
+done

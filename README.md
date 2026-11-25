@@ -209,6 +209,15 @@ sha256sum -c SHA256SUMS
 `install.sh` runs `pip install --no-index --find-links wheelhouse litellm-gateway-hooks`, so it never touches
 the network. LiteLLM 1.108.x must already be installed in that environment (it is not bundled).
 
+The same bundle is also published as a Docker image (`Dockerfile`, built with `docker build -t
+litellm-gateway-hooks:<VERSION> .`), with the bundle in `/opt/litellm-gateway-hooks`. To install it into a proxy
+image:
+
+```dockerfile
+COPY --from=unviable9201/litellm-gateway-hooks:<VERSION> /opt/litellm-gateway-hooks /tmp/gateway-hooks
+RUN /tmp/gateway-hooks/install.sh /path/to/proxy/python && rm -rf /tmp/gateway-hooks
+```
+
 Environment for the proxy:
 
 ```bash
@@ -241,10 +250,16 @@ budgets or RPM/TPM for these users, or both will enforce.
 ## Development
 
 ```bash
+scripts/install-git-hooks.sh         # once per clone: block commits and pushes that contain secrets
 uv venv .venv && uv pip install --python .venv/bin/python -e ".[test]"
 .venv/bin/python -m pytest -q        # unit tests, fakeredis runs the real Lua scripts
 scripts/build_bundle.sh              # build/litellm-gateway-hooks-<version>-bundle.tar.gz (needs network)
 ```
+
+The git hooks (`.githooks/`) run gitleaks with `.gitleaks.toml`: `pre-commit` scans the staged changes and
+`pre-push` scans every commit being pushed, so a commit made with `--no-verify` is still caught at push. Both
+block when gitleaks is missing. `git push --no-verify` skips them, so also turn on GitHub secret scanning push
+protection for the repository.
 
 The end-to-end run (`e2e/`) uses a real LiteLLM 1.108.4 proxy, a fakeredis TCP server and mocked model
 responses. The user lookup against a real Postgres has not been exercised. Its queries follow LiteLLM's
