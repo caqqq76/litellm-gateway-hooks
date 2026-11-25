@@ -34,6 +34,7 @@ tests/                     mirrors the package: core/, routing/, limits/, test_g
 e2e/                       config for an end-to-end run against a real proxy
 scripts/                   offline bundle build (build_bundle.sh, install.sh.in)
 APP_ENGINEER_GUIDE.md, app_example/   guide and reference client for applications calling the proxy
+docs/RUNBOOK.md            step-by-step production setup on an air-gapped proxy, with checks and troubleshooting
 ```
 
 ### Hook points this repo implements
@@ -197,6 +198,9 @@ team is the user's first entry in `LiteLLM_UserTable.teams`, cached for `team_ca
 
 ## Install
 
+For a production rollout, follow [docs/RUNBOOK.md](docs/RUNBOOK.md): database pre-checks, install, config, smoke
+test, troubleshooting and rollback. The short version follows.
+
 Offline (air-gapped) install from the bundle, into the same Python environment as the LiteLLM proxy:
 
 ```bash
@@ -263,4 +267,5 @@ protection for the repository.
 
 The end-to-end run (`e2e/`) uses a real LiteLLM 1.108.4 proxy, a fakeredis TCP server and mocked model
 responses. The user lookup against a real Postgres has not been exercised. Its queries follow LiteLLM's
-`schema.prisma`, so test it against your database first (runbook Step 6).
+`schema.prisma`, so test it against your database first
+([runbook, team lookup check](docs/RUNBOOK.md#team-lookup-check-required-never-tested-before-production)).
