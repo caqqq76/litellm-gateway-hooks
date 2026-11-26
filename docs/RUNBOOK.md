@@ -20,8 +20,8 @@ Rules for an AI agent assisting with this setup:
 | Version | 0.0.1 |
 | Bundle file | `litellm-gateway-hooks-0.0.1-bundle.tar.gz` |
 | Bundle SHA-256 | Not fixed: each build of the tarball has its own hash. Record it as `<BUNDLE_SHA256>` (Prerequisites) |
-| Bundle as a Docker image | `unviable9201/litellm-gateway-hooks:0.0.1@sha256:3576ffdcf24aad6b5322bba362870fc4fbe4c364537cdcc315d983e60f741feb`, bundle in `/opt/litellm-gateway-hooks` |
-| SHA-256 of the image's `SHA256SUMS` | `7b9bd971514091c91e2bf6783eb3b4a7c27a08052fd26da99e1277659784ac05` |
+| Bundle as a Docker image | `unviable9201/litellm-gateway-hooks:0.0.1@sha256:c7e3b44cd0a66e8598a90ccb4180f11094979ace82b5bcc56447371c7f30e633`, bundle in `/opt/litellm-gateway-hooks` |
+| SHA-256 of the image's `SHA256SUMS` | `90112a6c9f5d4512d830ef7e998d3955aa2854bd671f448dc8fb8b3b551c2366` |
 | Source | <https://github.com/caqqq76/litellm-gateway-hooks> |
 | Python package / import name | `litellm-gateway-hooks` / `gateway_hooks` |
 | Required LiteLLM version | 1.108.x with the proxy extras (`litellm[proxy]`), already installed, not in the bundle |
@@ -39,8 +39,8 @@ The bundle is built on a host with internet access and carried into the air-gapp
 
 - **Tarball.** In a clone of this repository, run `scripts/build_bundle.sh`. It writes `build/litellm-gateway-hooks-0.0.1-bundle.tar.gz` and prints its SHA-256 on the last line. Send that hash to the operator separately from the file; it is `<BUNDLE_SHA256>`.
 - **Docker image.** On the connected host, pull by digest (Docker verifies it) and tag it:
-  `docker pull unviable9201/litellm-gateway-hooks:0.0.1@sha256:3576ffdcf24aad6b5322bba362870fc4fbe4c364537cdcc315d983e60f741feb`, then
-  `docker tag unviable9201/litellm-gateway-hooks@sha256:3576ffdcf24aad6b5322bba362870fc4fbe4c364537cdcc315d983e60f741feb unviable9201/litellm-gateway-hooks:0.0.1`.
+  `docker pull unviable9201/litellm-gateway-hooks:0.0.1@sha256:c7e3b44cd0a66e8598a90ccb4180f11094979ace82b5bcc56447371c7f30e633`, then
+  `docker tag unviable9201/litellm-gateway-hooks@sha256:c7e3b44cd0a66e8598a90ccb4180f11094979ace82b5bcc56447371c7f30e633 unviable9201/litellm-gateway-hooks:0.0.1`.
   Save it with `docker save -o litellm-gateway-hooks-0.0.1.image.tar unviable9201/litellm-gateway-hooks:0.0.1`, carry the file over, and run `docker load -i litellm-gateway-hooks-0.0.1.image.tar` on the image build host. Step 1 checks it there.
 
 ## Prerequisites
