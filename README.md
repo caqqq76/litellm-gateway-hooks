@@ -1,6 +1,6 @@
 # litellm-gateway-hooks
 
-Custom hook code that extends the LiteLLM proxy (written and tested against LiteLLM v1.108.4). It decides who a
+Custom hook code that extends the LiteLLM proxy (written for LiteLLM 1.108.x, tested against v1.108.15). It decides who a
 request belongs to, applies team and user model routing, and enforces per-user and per-team rate limits and
 peak/off-peak budgets. More routing decisions are planned (see [Model routing](#model-routing)).
 
@@ -47,7 +47,7 @@ docs/RUNBOOK.md            step-by-step production setup on an air-gapped proxy,
 
 ## Request flow in the proxy
 
-The order in which LiteLLM 1.108.4 calls the hook points for one `/chat/completions` request:
+The order in which LiteLLM 1.108.15 calls the hook points for one `/chat/completions` request:
 
 1. **Auth.** `general_settings.custom_auth` if set, otherwise virtual-key auth. Model access for the key, team and
    customer is checked here against the model name the client sent.
@@ -65,10 +65,10 @@ The order in which LiteLLM 1.108.4 calls the hook points for one `/chat/completi
 9. **Logging,** after the response (for streams, after the last chunk): `async_log_success_event` or
    `async_log_failure_event`.
 
-## LiteLLM hook points (v1.108.4)
+## LiteLLM hook points (v1.108.15)
 
 All `CustomLogger` hook points are methods on a subclass of `litellm.integrations.custom_logger.CustomLogger`
-registered in `litellm_settings.callbacks`. Signatures below are as defined in v1.108.4; `user_api_key_dict` is
+registered in `litellm_settings.callbacks`. Signatures below are as defined in v1.108.15; `user_api_key_dict` is
 a `UserAPIKeyAuth`.
 
 **Define it on the registered class itself.** The proxy only calls `async_pre_call_hook`,
@@ -102,7 +102,7 @@ registered class's own `__dict__`. An inherited override is silently skipped (`l
 | `async_post_call_failure_deployment_hook` | `(self, request_data: Mapping, exception: Exception, call_type, fallback_depth: int \| None = None) -> None` | Per failed attempt, including retries and fallback hops | Observe only |
 | `async_post_call_streaming_deployment_hook` | `(self, request_data: dict, response_chunk, call_type) -> chunk \| None` | Per chunk from the deployment | Replace the chunk |
 | `log_model_group_rate_limit_error`, `log_success_fallback_event`, `log_failure_fallback_event` | `(self, exception \| original_model_group, ...)`, see `custom_logger.py` | On model-group 429s and fallbacks | Observe only |
-| `async_pre_routing_hook` | `(self, model, request_kwargs, messages=None, input=None, specific_deployment=False) -> PreRoutingHookResponse \| None` | **Not called for callbacks in v1.108.4.** The router only calls its own strategies (auto-router, complexity router) | Nothing. Use a routing plugin or `async_pre_call_hook` instead |
+| `async_pre_routing_hook` | `(self, model, request_kwargs, messages=None, input=None, specific_deployment=False) -> PreRoutingHookResponse \| None` | **Not called for callbacks in v1.108.15.** The router only calls its own strategies (auto-router, complexity router) | Nothing. Use a routing plugin or `async_pre_call_hook` instead |
 
 ### Logging hooks (SDK and proxy)
 
@@ -114,7 +114,7 @@ registered class's own `__dict__`. An inherited override is silently skipped (`l
 | `async_log_stream_event` | `(self, kwargs, response_obj, start_time, end_time)` | Per stream event |
 | `async_logging_hook` / `logging_hook` | `(self, kwargs: dict, result, call_type) -> (kwargs, result)` | Before loggers see the data. Mask or redact what is logged |
 | `async_log_audit_log_event` | `(self, audit_log: StandardAuditLogPayload)` | When an admin audit log entry is written |
-| `async_pre_request_hook` | `(self, model: str, messages: list, kwargs: dict) -> dict \| None` | Only on the Anthropic `/v1/messages` pass-through path in v1.108.4 |
+| `async_pre_request_hook` | `(self, model: str, messages: list, kwargs: dict) -> dict \| None` | Only on the Anthropic `/v1/messages` pass-through path in v1.108.15 |
 | `async_get_chat_completion_prompt` | `(self, model, messages, non_default_params, prompt_id, prompt_variables, dynamic_callback_params, litellm_logging_obj, ...) -> (model, messages, params)` | Prompt management: resolve a `prompt_id` to messages |
 
 ### Other extension points
@@ -124,7 +124,7 @@ registered class's own `__dict__`. An inherited override is silently skipped (`l
 | Routing plugin | `class P: async def run(self, context: RoutingContext) -> RoutingContext` | `router_settings.plugins: [module.instance]` | Runs before the routing decision for every request. Narrow `context.candidate_models` (deployment `litellm_params.model` values) and add `context.signals`. `context.metadata` carries the request metadata, including `user_api_key_*` fields. Narrowing to nothing fails the request |
 | Custom auth | `async def user_api_key_auth(request: Request, api_key: str) -> UserAPIKeyAuth \| str` | `general_settings.custom_auth: module.fn` | Replaces virtual-key auth. Raise `ProxyException` (not `HTTPException`) to keep response headers. Common checks run only with `custom_auth_run_common_checks: true` |
 | Custom guardrail | `CustomGuardrail` subclass with `apply_guardrail(self, inputs, request_data, input_type, logging_obj=None)` | `guardrails:` list, `mode: pre_call \| during_call \| post_call \| ...` | For content checks. Runs in the same pre/during/post phases as the hooks above |
-| Custom routing strategy | `CustomRoutingStrategyBase` with `async_get_available_deployment(model, messages, input, specific_deployment, request_kwargs)` | `Router.set_custom_routing_strategy(...)` in Python | SDK `Router` only. There is no proxy config setting for it in v1.108.4 |
+| Custom routing strategy | `CustomRoutingStrategyBase` with `async_get_available_deployment(model, messages, input, specific_deployment, request_kwargs)` | `Router.set_custom_routing_strategy(...)` in Python | SDK `Router` only. There is no proxy config setting for it in v1.108.15 |
 
 ## Model routing
 
@@ -233,7 +233,7 @@ sha256sum -c SHA256SUMS
 ```
 
 `install.sh` runs `pip install --no-index --find-links wheelhouse litellm-gateway-hooks`, so it never touches
-the network. LiteLLM 1.108.x must already be installed in that environment (it is not bundled).
+the network. LiteLLM 1.108.15 or a later 1.108.x must already be installed in that environment (it is not bundled).
 
 The same bundle is also published as a Docker image (`Dockerfile`, built with `docker build -t
 litellm-gateway-hooks:<VERSION> .`), with the bundle in `/opt/litellm-gateway-hooks`. To install it into a proxy
@@ -287,7 +287,7 @@ The git hooks (`.githooks/`) run gitleaks with `.gitleaks.toml`: `pre-commit` sc
 block when gitleaks is missing. `git push --no-verify` skips them, so also turn on GitHub secret scanning push
 protection for the repository.
 
-The end-to-end run (`e2e/`) uses a real LiteLLM 1.108.4 proxy, a fakeredis TCP server and mocked model
+The end-to-end run (`e2e/`) uses a real LiteLLM 1.108.15 proxy, a fakeredis TCP server and mocked model
 responses. The user lookup against a real Postgres has not been exercised. Its queries follow LiteLLM's
 `schema.prisma`, so test it against your database first
 ([runbook, team lookup check](docs/RUNBOOK.md#team-lookup-check-required-never-tested-before-production)).

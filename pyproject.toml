@@ -5,7 +5,7 @@ description = "Custom hook code for the LiteLLM proxy: user identity, model rout
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "litellm>=1.108.4,<1.109",
+    "litellm>=1.108.15,<1.109",
     "redis>=5",
     "pydantic>=2",
     "pyyaml>=6",
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["litellm[proxy]>=1.108.4,<1.109", "pytest", "pytest-asyncio", "fakeredis[lua]"]
+test = ["litellm[proxy]>=1.108.15,<1.109", "pytest", "pytest-asyncio", "fakeredis[lua]"]
 
 [project.scripts]
 gateway-hooks-check = "gateway_hooks.__main__:main"

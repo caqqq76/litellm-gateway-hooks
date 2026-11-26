@@ -2,7 +2,7 @@
 
 ## Purpose and rules for the agent
 
-This runbook installs litellm-gateway-hooks 0.0.1 into an existing, air-gapped LiteLLM 1.108.x proxy. It adds per-user, per-model RPM, TPM, concurrency and spend budgets (15m rolling, 1h and 1d fixed, separate peak and off-peak pools), and returns HTTP 429 with an exact retry time.
+This runbook installs litellm-gateway-hooks 0.0.1 into an existing, air-gapped LiteLLM 1.108.x proxy (1.108.15 or later). It adds per-user, per-model RPM, TPM, concurrency and spend budgets (15m rolling, 1h and 1d fixed, separate peak and off-peak pools), and returns HTTP 429 with an exact retry time.
 
 Rules for an AI agent assisting with this setup:
 
@@ -24,7 +24,7 @@ Rules for an AI agent assisting with this setup:
 | SHA-256 of the image's `SHA256SUMS` | `90112a6c9f5d4512d830ef7e998d3955aa2854bd671f448dc8fb8b3b551c2366` |
 | Source | <https://github.com/caqqq76/litellm-gateway-hooks> |
 | Python package / import name | `litellm-gateway-hooks` / `gateway_hooks` |
-| Required LiteLLM version | 1.108.x with the proxy extras (`litellm[proxy]`), already installed, not in the bundle |
+| Required LiteLLM version | 1.108.15 or a later 1.108.x, with the proxy extras (`litellm[proxy]`), already installed, not in the bundle |
 | Python | 3.10 or newer, same interpreter as the proxy |
 | Callback path for proxy config | `gateway_hooks.callback.proxy_handler_instance` |
 | Config check command | `<PY> -m gateway_hooks <CONFIG>` (the same as `gateway-hooks-check <CONFIG>`) |
@@ -49,7 +49,7 @@ Confirm every item before Step 1. Record the values in the right column. Later s
 
 | Check | Command or source | Record as |
 | --- | --- | --- |
-| LiteLLM 1.108.x installed in the proxy's Python | `<PY> -c "import importlib.metadata as m; print(m.version('litellm'))"` | `<PY>` = path of that Python |
+| LiteLLM 1.108.15 or a later 1.108.x installed in the proxy's Python | `<PY> -c "import importlib.metadata as m; print(m.version('litellm'))"` | `<PY>` = path of that Python |
 | LiteLLM proxy extras present in that Python | `<PY> -c "import fastapi"` prints nothing |  |
 | pip available in that Python | `<PY> -m pip --version` |  |
 | Redis reachable from the proxy host (single node, not Cluster) | `redis-cli -u <REDIS_URL> ping` returns `PONG` | `<REDIS_URL>` |
@@ -245,7 +245,7 @@ On a host, from inside the extracted bundle folder:
 ./install.sh <PY>
 ```
 
-The script refuses to run unless LiteLLM 1.108.x is installed for `<PY>`, then runs `<PY> -m pip install --no-index --find-links wheelhouse litellm-gateway-hooks==0.0.1` and imports the package to check it.
+The script refuses to run unless LiteLLM 1.108.15 or a later 1.108.x is installed for `<PY>`, then runs `<PY> -m pip install --no-index --find-links wheelhouse litellm-gateway-hooks==0.0.1` and imports the package to check it.
 
 Check: the last line reads `litellm-gateway-hooks installed for litellm 1.108.x`. Then confirm:
 
@@ -453,7 +453,7 @@ Match the exact message first. Log lines from the limiter all start with `gatewa
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `install.sh`: `litellm is not installed for <PY>` | Wrong interpreter | Use the Python that runs the proxy (`head -1 $(which litellm)` shows it) |
-| `install.sh`: `built for litellm 1.108.x, found ...` | LiteLLM version mismatch | Stop. Needs a bundle built for that LiteLLM version |
+| `install.sh`: `built for litellm 1.108.15 or a later 1.108.x, found ...` | LiteLLM older than 1.108.15, or another minor version | Older 1.108.x: upgrade LiteLLM to 1.108.15 or later first. Another minor version: stop, it needs a bundle built for it |
 | `install.sh`: `ModuleNotFoundError: No module named 'fastapi'` after `Successfully installed` | LiteLLM installed without its proxy extras, so `<PY>` is not the proxy's Python | Use the proxy's Python. Do not install fastapi by hand |
 | pip: `No matching distribution found` | Python older than 3.10, or not run from the bundle directory | Check `<PY> --version`. Run `./install.sh` from inside the extracted folder |
 | Proxy start: `Set GATEWAY_HOOKS_CONFIG ...` | Env var missing in the proxy process | Set it (Step 4) and restart |
@@ -481,7 +481,7 @@ Match the exact message first. Log lines from the limiter all start with `gatewa
 
 **Yearly.** Before 1 January, add next year's `holidays` and `extra_workdays` from the DGPA calendar.
 
-**Upgrade LiteLLM.** Version 0.0.1 is pinned to LiteLLM 1.108.x. Do not upgrade LiteLLM to another minor version until a matching litellm-gateway-hooks build has been tested.
+**Upgrade LiteLLM.** Version 0.0.1 needs LiteLLM 1.108.15 or a later 1.108.x (tested with 1.108.15). Do not upgrade LiteLLM to another minor version until a matching litellm-gateway-hooks build has been tested.
 
 **Upgrade litellm-gateway-hooks.** Get the new bundle (Getting the bundle), repeat Steps 1, 2 and 5, and read the new version's README for config changes.
 
