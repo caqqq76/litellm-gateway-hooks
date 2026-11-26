@@ -16,6 +16,9 @@ ADMIT_LUA = r"""
 local now = tonumber(ARGV[1])
 local member = ARGV[2]
 local n = tonumber(ARGV[3])
+-- dry = '1': only report whether the entries would admit a request at `now` (which may be in the future).
+-- Nothing is written or pruned. Only budget kinds ('broll', 'bfix') may be sent in dry mode.
+local dry = ARGV[4] == '1'
 
 local function rolling(key, window, bucket)
   local cutoff = now - window
@@ -26,7 +29,7 @@ local function rolling(key, window, bucket)
     local b = tonumber(flat[i])
     local v = tonumber(flat[i + 1])
     if b + bucket <= cutoff then
-      redis.call('HDEL', key, flat[i])
+      if not dry then redis.call('HDEL', key, flat[i]) end
     else
       total = total + v
       buckets[#buckets + 1] = {b, v}
@@ -38,7 +41,7 @@ end
 local worst_idx, worst_wait, worst_cur = 0, -1, '0'
 for i = 1, n do
   local key = KEYS[i]
-  local base = 3 + (i - 1) * 5
+  local base = 4 + (i - 1) * 4
   local kind = ARGV[base + 1]
   local limit = tonumber(ARGV[base + 2])
   local p1 = tonumber(ARGV[base + 3])
@@ -90,10 +93,13 @@ end
 if worst_idx > 0 then
   return {0, worst_idx, math.floor(worst_wait), worst_cur}
 end
+if dry then
+  return {1}
+end
 
 for i = 1, n do
   local key = KEYS[i]
-  local base = 3 + (i - 1) * 5
+  local base = 4 + (i - 1) * 4
   local kind = ARGV[base + 1]
   local p1 = tonumber(ARGV[base + 3])
   if kind == 'rpm' then
@@ -188,11 +194,24 @@ def _fmt(v: float) -> str:
 
 
 async def admit(runner: ScriptRunner, entries: list[Entry], now_ms: int, member: str) -> Blocked | None:
+    """Admit a request at `now_ms`: None and the request is recorded, or the entry that blocks it."""
+    return await _run_admit(runner, entries, now_ms, member, dry=False)
+
+
+async def check_budgets(runner: ScriptRunner, entries: list[Entry], at_ms: int) -> Blocked | None:
+    """Would these budget entries admit a request at `at_ms` (a future time is fine)? Writes nothing."""
+    if any(e.limit_type != "budget" for e in entries):
+        raise ValueError("check_budgets only takes budget entries")
+    return await _run_admit(runner, entries, at_ms, "", dry=True)
+
+
+async def _run_admit(runner: ScriptRunner, entries: list[Entry], now_ms: int, member: str, dry: bool
+                     ) -> Blocked | None:
     if not entries:
         return None
-    args: list[str | int | float] = [now_ms, member, len(entries)]
+    args: list[str | int | float] = [now_ms, member, len(entries), "1" if dry else "0"]
     for e in entries:
-        args += [e.kind, _fmt(e.limit), e.p1, e.p2, 0]
+        args += [e.kind, _fmt(e.limit), e.p1, e.p2]
     result = await runner.admit([e.key for e in entries], args)
     if int(result[0]) == 1:
         return None

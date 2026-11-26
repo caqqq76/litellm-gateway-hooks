@@ -35,7 +35,7 @@ Catch `litellm.RateLimitError`. The headers are on `e.litellm_response_headers` 
 | `retry-after` | The same wait in whole seconds, rounded up |
 | `x-ratelimit-limit-type` | `rpm`, `tpm`, `concurrency` or `budget` |
 | `x-ratelimit-scope` | `user`, or `team` for a shared team budget |
-| `x-ratelimit-model` | Model whose limit was hit |
+| `x-ratelimit-model` | Model whose limit was hit (or the model group sharing its limits) |
 | `x-ratelimit-limit` | The limit (USD for budgets) |
 | `x-ratelimit-reset-at` | When the request will succeed, ISO-8601 in Taipei time |
 | `x-ratelimit-window` | `15m`, `1h` or `1d` (budgets only) |

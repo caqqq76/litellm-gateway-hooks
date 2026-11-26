@@ -7,7 +7,8 @@
 # budget -> 429 until the period changes, e.g. "no expensive model during peak hours").
 #
 # Models are the LiteLLM model group names AFTER routing (model_routes), so spend is tracked per user per
-# real model no matter which application or alias sent the request.
+# real model no matter which application or alias sent the request. Models listed together in model_groups
+# share one set of limits and counters, set under the group name (M above is then the group).
 
 settings:
   redis_url: os.environ/GATEWAY_HOOKS_REDIS_URL
@@ -45,6 +46,11 @@ windows:
   "15m": {seconds: 900, mode: rolling, bucket_seconds: 60}
   "1h": {seconds: 3600, mode: fixed, anchor: midnight}       # clock hours
   "1d": {seconds: 86400, mode: fixed, anchor: midnight}      # calendar day, Taipei time
+
+# Optional: models that share limits, e.g. the model groups one model is load-balanced over with model_routes.
+# Without this, a user routed to gpt-4o-a who also sends gpt-4o-b directly would get a second set of limits.
+# model_groups:
+#   gpt-4o: [gpt-4o-a, gpt-4o-b]
 
 defaults:
   models:

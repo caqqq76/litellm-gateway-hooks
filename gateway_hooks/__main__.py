@@ -43,12 +43,15 @@ def main(argv: list[str] | None = None) -> int:
         team = cfg.teams.get(args.team) if args.team else None
         routing = resolve_routing(user, team, args.model)
         print(f"model: {args.model} -> {routing.target_model} ({'allowed' if routing.allowed else 'NOT allowed'})")
-        eff = merge_limits([user, team, cfg.defaults], routing.target_model, list(cfg.windows))
+        limit_model = cfg.limit_model(routing.target_model)
+        if limit_model != routing.target_model:
+            print(f"model group: {limit_model} (limits and counters shared with {list(cfg.model_groups[limit_model])})")
+        eff = merge_limits([user, team, cfg.defaults], limit_model, list(cfg.windows))
         print(f"user limits: rpm={eff.rpm} tpm={eff.tpm} concurrency={eff.max_parallel_requests}")
         for p, budgets in eff.budget.items():
             print(f"  budget {p}: {budgets or 'none'}")
         if team is not None and team.team_pool is not None:
-            pool = merge_limits([team.team_pool], routing.target_model, list(cfg.windows))
+            pool = merge_limits([team.team_pool], limit_model, list(cfg.windows))
             print(f"team pool: rpm={pool.rpm} tpm={pool.tpm} concurrency={pool.max_parallel_requests} budget={pool.budget}")
     return 0
 

@@ -139,8 +139,8 @@ Where a routing decision can live, depending on what it needs to change:
 
 Rewriting `data["model"]` happens after auth, so LiteLLM checks the name the client sent against key, team and
 customer model lists. The rewritten name must be enforced by `allowed_models`. Limits are counted against the
-model after `async_pre_call_hook` routing. Deployment-level decisions made later in the router do not change
-that model name.
+model after `async_pre_call_hook` routing, or against its `model_groups` entry when it has one. Deployment-level
+decisions made later in the router do not change that model name.
 
 ## Adding a hook point
 
@@ -159,9 +159,31 @@ Per user and per model (after routing):
 - spend budgets for 15m (rolling), 1h and 1d (fixed), with separate peak and off-peak pools. Peak is
   Mon to Fri 09:00 to 18:00 Asia/Taipei, minus `holidays`, plus `extra_workdays`
 - team defaults that users override field by field, and an optional team-wide pool
+- model groups: models listed together under `model_groups` share every limit and counter
 
-A 429 carries the exact wait (`retry-after`, `retry-after-ms`, `x-ratelimit-*`). Everything fails open: Redis
-or database errors, and unexpected errors in this code, let the request through.
+A 429 carries the exact wait (`retry-after`, `retry-after-ms`, `x-ratelimit-*`), the time the request will be
+let in. For a budget it looks past the end of peak or off-peak when the next period's pool is spent too or set
+to `0`. Everything fails open: Redis or database errors, and unexpected errors in this code, let the request
+through.
+
+### Model groups
+
+When one model is load-balanced over several LiteLLM model groups (for example `model_routes` sends some users to
+`gpt-4o-a` and others to `gpt-4o-b`), list them as one group so a user who sends the other name directly gets
+no second set of limits:
+
+```yaml
+model_groups:
+  gpt-4o: [gpt-4o-a, gpt-4o-b]     # the group name may also be a member
+defaults:
+  models:
+    gpt-4o: {rpm: 20, budget: {peak: {"1d": 2.0}}}   # limits are set under the group name
+```
+
+RPM, TPM, concurrency and budgets are all counted per group, for the user and for a team pool. The 429 names the
+group in `x-ratelimit-model`. `model_routes` and `allowed_models` still work on the real model names. A member
+can't have limits of its own: the config check rejects them. Counters start empty for a new group, so spend
+counted under the member names before it was added does not carry over.
 
 ### Who a request belongs to
 

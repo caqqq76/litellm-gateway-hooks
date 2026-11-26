@@ -32,14 +32,16 @@ async def handle(ctx: Context, user_api_key_dict, data: dict) -> dict:
     routing = resolve_routing(user_cfg, team_cfg, requested_model)
     if not routing.allowed:
         raise forbidden(f"Model {requested_model} is not allowed for user {identity.user_id}")
-    model = routing.target_model
-    data["model"] = model
+    data["model"] = routing.target_model
+    # models in one model group share limits and counters, so sending another member's name gains nothing
+    limit_model = ctx.config.limit_model(routing.target_model)
 
     windows = list(ctx.config.windows)
-    scopes = [Scope("user", identity.user_id, merge_limits([user_cfg, team_cfg, ctx.config.defaults], model, windows))]
+    scopes = [Scope("user", identity.user_id,
+                    merge_limits([user_cfg, team_cfg, ctx.config.defaults], limit_model, windows))]
     if team_id is not None and team_cfg is not None and team_cfg.team_pool is not None:
-        scopes.append(Scope("team", team_id, merge_limits([team_cfg.team_pool], model, windows)))
+        scopes.append(Scope("team", team_id, merge_limits([team_cfg.team_pool], limit_model, windows)))
 
     member = str(data.get("litellm_call_id") or f"{identity.user_id}:{ctx.clock()}")
-    await ctx.limits.admit(scopes, model, member)
+    await ctx.limits.admit(scopes, limit_model, member)
     return data

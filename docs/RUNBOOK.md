@@ -282,6 +282,7 @@ A header value that matches no user gets `unknown_user` handling (`defaults` or 
 - **Keys.** `teams` keys are the LiteLLM `team_id` or `team_alias`. `users` keys are the LiteLLM `user_id` or the `sso_user_id` (NT account), whichever is easier to read.
 - **Team membership** comes from LiteLLM's Postgres (`LiteLLM_UserTable.teams`, first entry). It is not set in this file.
 - **Model names** are LiteLLM model group names after routing. `"*"` matches any model.
+- **Model groups.** `model_groups` lists models that share one set of limits and counters, typically the model groups one model is load-balanced over with `model_routes` (`gpt-4o: [gpt-4o-a, gpt-4o-b]`). Set their limits under the group name. A member cannot have limits of its own (the check rejects it). Ask the operator which models are load-balanced; without a group, a user who sends another member's name directly gets a second set of limits.
 - **Resolution**, per field, first match wins: `users.U.models.M`, `users.U.models."*"`, `teams.T.models.M`, `teams.T.models."*"`, `defaults.models.M`, `defaults.models."*"`. A missing field means no limit.
 - **Special values.** `-1` removes a limit set by a lower layer. `0` for `rpm`, `tpm` or `max_parallel_requests` blocks the model (403). A `0` budget blocks until the period changes (use it for off-peak-only models).
 - **Budgets** are USD per window, set separately for `peak` and `off_peak`. Allowed window names: `15m`, `1h`, `1d`.
@@ -534,14 +535,14 @@ Check: requests succeed and no `gateway_hooks` lines appear in the log.
 | `gwh:b:<period>:15m:user:<id>:<model>` | hash | Spend per 1-minute bucket |
 | `gwh:b:<period>:<1h or 1d>:<window start epoch>:user:<id>:<model>` | string | Spend in that fixed window |
 
-Team-pool keys use `team:<team_id>` instead of `user:<id>`. `<id>` and `<model>` are URL-encoded. All keys expire on their own.
+Team-pool keys use `team:<team_id>` instead of `user:<id>`. `<model>` is the model group name for models in `model_groups`. `<id>` and `<model>` are URL-encoded. All keys expire on their own.
 
 ### Known behaviour
 
 - Check-then-charge: requests in flight when a budget is reached still finish. Overspend is at most about `max_parallel_requests` times the cost of one request. TPM works the same way.
 - Spend is LiteLLM's `response_cost` (USD) for the routed model, per user, across all apps and keys. Counters use the LiteLLM `user_id`, so header and personal-key traffic of one person add up.
 - During a database outage, header traffic is counted under the raw header value, separately from that person's personal-key traffic, and team settings are skipped.
-- A peak budget wait never goes past 18:00, because off-peak is a separate pool.
+- Peak and off-peak are separate pools, so a peak budget wait normally ends at 18:00. When the off-peak pool is spent too (or `0`), `retry-after` looks ahead to when a pool really has room, for example to midnight for a spent `1d` off-peak budget. The 429 still names the limit that refused the request.
 - RPM counts every admitted request, including ones that fail later.
 - The user header is trusted. LiteLLM also reads `x-litellm-end-user-id`, `x-litellm-customer-id` and the body field `user`, and the first two take priority. Any API-key holder can name any user. A header also overrides the owner of a personal key.
 - Any unexpected limiter error lets the request through and logs `unexpected error, letting request through`.

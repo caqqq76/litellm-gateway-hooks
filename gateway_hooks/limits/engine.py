@@ -14,7 +14,10 @@ from litellm.proxy.common_utils.proxy_rate_limit_error import ProxyRateLimitErro
 
 from ..core.calendar import Calendar, PeriodInfo
 from ..core.config import EffectiveLimits, GatewayConfig
-from .store import Blocked, ChargeItem, Entry, RedisScripts, ScriptRunner, admit, charge, scope_key
+from .store import ChargeItem, Entry, RedisScripts, ScriptRunner, admit, charge, check_budgets, scope_key
+
+# how many peak / off-peak periods a budget retry-after looks ahead (8 = at least two working days)
+MAX_PERIODS_AHEAD = 8
 
 
 @dataclass
@@ -168,7 +171,9 @@ class LimitsEngine:
             e, c, r = self._entries_for(scope, model, period, now)
             zero_budget = next((x for x in e if x.limit_type == "budget" and x.limit == 0), None)
             if zero_budget is not None:
-                raise self.rate_limit_error(zero_budget, max(1, int((period.end.timestamp() - now) * 1000)), 0, now)
+                to_period_end = max(1, int((period.end.timestamp() - now) * 1000))
+                wait_ms = await self._budget_wait(zero_budget, to_period_end, scopes, model, period, now)
+                raise self.rate_limit_error(zero_budget, wait_ms, 0, now)
             entries += e
             admission.charges += c
             admission.releases += r
@@ -181,17 +186,42 @@ class LimitsEngine:
             return
 
         if blocked is not None:
-            raise self.rate_limit_error(blocked.entry, self._cap_budget_wait(blocked, period, now), blocked.current, now)
+            wait_ms = await self._budget_wait(blocked.entry, blocked.wait_ms, scopes, model, period, now)
+            raise self.rate_limit_error(blocked.entry, wait_ms, blocked.current, now)
 
         if admission.charges or admission.releases:
             self._prune(now)
             self._admissions[member] = admission
 
-    def _cap_budget_wait(self, blocked: Blocked, period: PeriodInfo, now: float) -> int:
-        """Spend in one period's pool never blocks the next period, so no budget wait outlasts the period."""
-        if blocked.entry.limit_type != "budget":
-            return blocked.wait_ms
-        return max(1, min(blocked.wait_ms, int((period.end.timestamp() - now) * 1000)))
+    async def _budget_wait(self, entry: Entry, wait_ms: int, scopes: list[Scope], model: str,
+                           period: PeriodInfo, now: float) -> int:
+        """How long until a request blocked by `entry` is really admitted, so a client that waits is not refused again.
+
+        Each period has its own budget pools, so a budget wait that reaches the end of this period ends there,
+        unless the next period's pools are spent too or set to 0. Then look ahead, period by period.
+        """
+        if entry.limit_type != "budget" or now + wait_ms / 1000 < period.end.timestamp():
+            return wait_ms
+        t = period.end.timestamp()
+        for _ in range(MAX_PERIODS_AHEAD):
+            nxt = self.calendar.period_at(t)
+            budgets = [e for s in scopes for e in self._entries_for(s, model, nxt, t)[0] if e.limit_type == "budget"]
+            if any(e.limit == 0 for e in budgets):
+                t = nxt.end.timestamp()
+                continue
+            try:
+                blocked = await self._redis(check_budgets(self._runner(), budgets, int(t * 1000)),
+                                            self.config.settings.redis_timeout_ms)
+            except Exception as e:  # noqa: BLE001  # the 429 still goes out, with the wait up to the period end
+                log.warning("gateway_hooks: budget look-ahead failed, retry-after stops at a period end: %r", e)
+                break
+            if blocked is None:
+                break
+            if t + blocked.wait_ms / 1000 < nxt.end.timestamp():
+                t += blocked.wait_ms / 1000
+                break
+            t = nxt.end.timestamp()
+        return max(1, int((t - now) * 1000))
 
     def _prune(self, now: float) -> None:
         if now - self._last_prune < 60:

@@ -9,6 +9,17 @@ model_list:
       model: openai/gpt-4o-mini
       api_key: fake-key
       mock_response: "Hello from the mock gpt-4o-mini deployment"
+  # one model load-balanced per user over two model groups (gateway-hooks model_groups pools them)
+  - model_name: gpt-4o-a
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: fake-key
+      mock_response: "Hello from the mock gpt-4o-a deployment"
+  - model_name: gpt-4o-b
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: fake-key
+      mock_response: "Hello from the mock gpt-4o-b deployment"
 
 litellm_settings:
   callbacks: gateway_hooks.callback.proxy_handler_instance

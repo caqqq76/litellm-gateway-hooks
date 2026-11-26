@@ -130,15 +130,25 @@ class GatewayConfig(_Strict):
     settings: Settings = Settings()
     peak_hours: PeakHours = PeakHours()
     windows: dict[str, WindowSpec] = Field(default_factory=lambda: dict(DEFAULT_WINDOWS))
+    # group name -> model names (after routing) that share one set of limits and counters, e.g. the deployments a
+    # model is load-balanced over. Limits are set under the group name; a member never has limits of its own.
+    model_groups: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     defaults: LimitSet = LimitSet()
     teams: dict[str, TeamConfig] = Field(default_factory=dict)
     users: dict[str, Principal] = Field(default_factory=dict)
 
+    def _limit_sets(self) -> list[tuple[str, LimitSet | None]]:
+        sets: list[tuple[str, LimitSet | None]] = [("defaults", self.defaults)]
+        for name, team in self.teams.items():
+            sets += [(f"teams.{name}", team), (f"teams.{name}.team_pool", team.team_pool)]
+        sets += [(f"users.{name}", user) for name, user in self.users.items()]
+        return sets
+
     @model_validator(mode="after")
     def _budget_windows_exist(self) -> "GatewayConfig":
-        def check(where: str, ls: LimitSet | None) -> None:
+        for where, ls in self._limit_sets():
             if ls is None:
-                return
+                continue
             for model, ml in ls.models.items():
                 for period, per_window in ml.budget.items():
                     unknown = set(per_window) - set(self.windows)
@@ -147,14 +157,36 @@ class GatewayConfig(_Strict):
                             f"{where}.models.{model}.budget.{period}: unknown windows {sorted(unknown)}, "
                             f"defined windows are {sorted(self.windows)}"
                         )
-
-        check("defaults", self.defaults)
-        for name, team in self.teams.items():
-            check(f"teams.{name}", team)
-            check(f"teams.{name}.team_pool", team.team_pool)
-        for name, user in self.users.items():
-            check(f"users.{name}", user)
         return self
+
+    @model_validator(mode="after")
+    def _model_groups_valid(self) -> "GatewayConfig":
+        owner: dict[str, str] = {}
+        for group, members in self.model_groups.items():
+            if not members:
+                raise ValueError(f"model_groups.{group}: list at least one model")
+            for member in members:
+                if member in owner and owner[member] != group:
+                    raise ValueError(f"model_groups: {member} is in both {owner[member]} and {group}")
+                owner[member] = group
+        for group in self.model_groups:
+            if owner.get(group, group) != group:
+                raise ValueError(f"model_groups: {group} is a group and also a member of {owner[group]}")
+        for where, ls in self._limit_sets():
+            for model in ls.models if ls is not None else ():
+                if owner.get(model, model) != model:
+                    raise ValueError(
+                        f"{where}.models.{model}: {model} is in model group {owner[model]}, "
+                        f"so its limits are the group's. Set them under {owner[model]}"
+                    )
+        return self
+
+    def limit_model(self, model: str) -> str:
+        """The name limits are looked up and counted under: the model's group, or the model itself."""
+        for group, members in self.model_groups.items():
+            if model in members:
+                return group
+        return model
 
     def redis_url_value(self) -> str:
         return resolve_env(self.settings.redis_url)
